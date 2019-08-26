@@ -12,7 +12,7 @@ func main() {
 	if err != nil {
 		log.Fatal("error creating graphmatrix", err)
 	}
-	fmt.Println(z.Size())
+	fmt.Println(z.Dim())
 	if err := z.SetIndex(3, 3); err != nil {
 		log.Fatal("3,3 error: ", err)
 	}
@@ -43,16 +43,20 @@ func main() {
 	fmt.Println("string is")
 	fmt.Println(z)
 	fmt.Println("----- graphmatrix.NewFromSorted()")
-	i := []uint32{0, 0, 1, 2}
-	j := []uint32{1, 2, 2, 3}
+	i := []uint32{0, 0, 1, 2, 3}
+	j := []uint32{1, 2, 2, 3, 2}
 	z, err = graphmatrix.NewFromSortedIJ(i, j)
 	if err != nil {
 		log.Fatal("NewFromSortedIJ error: ", err)
 	}
 	fmt.Println(z)
-	fmt.Println("should be t, t, t, f")
+	// fmt.Println("should be t, t, t, f")
 	fmt.Println(z.GetIndex(0, 1))
 	fmt.Println(z.GetIndex(0, 2))
 	fmt.Println(z.GetIndex(1, 2))
+	fmt.Println(z.GetIndex(3, 2))
+	fmt.Println(z.GetIndex(2, 3))
 	fmt.Println(z.GetIndex(2, 1))
+	fmt.Println(z.GetRow(0)) // should be [1, 2]
+	fmt.Println(z.GetRow(2)) // should be [3]
 }

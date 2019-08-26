@@ -28,8 +28,12 @@ func New(m int) (GraphMatrix, error) {
 	return GraphMatrix{rowidx: r, colptr: c}, nil
 }
 
+func NewFromRC(r []uint32, c []uint64) (GraphMatrix, error) {
+	return GraphMatrix{rowidx: r, colptr: c}, nil
+}
+
 func (v GraphMatrix) String() string {
-	return fmt.Sprintf("GraphMatrix %v, %v, size %d", v.rowidx, v.colptr, v.Size())
+	return fmt.Sprintf("GraphMatrix %v, %v, size %d", v.rowidx, v.colptr, v.Dim())
 }
 
 // returns the maximum uint and its position in the vector.
@@ -61,33 +65,35 @@ func NewFromSortedIJ(s, d []uint32) (GraphMatrix, error) {
 	if m2 > m1 {
 		m = m2
 	}
+	m++
 
-	colptr := make([]uint64, d[0]+1, m)
-	currval := d[0]
-	for i, n := range d {
+	colptr := make([]uint64, s[0]+1, m)
+	currval := s[0]
+	for i, n := range s {
 		if n > currval { // the row has changed
 			colptr = append(colptr, uint64(i))
 			currval = n
 		}
 	}
+	fmt.Println("m = ", m)
 	colptr = append(colptr, uint64(m)+1)
-	return GraphMatrix{rowidx: s, colptr: colptr}, nil
+	return GraphMatrix{rowidx: d, colptr: colptr}, nil
 }
 
-// SortIJ sorts two vectors s and d by d, then by s. Modifies s and d.
+// SortIJ sorts two vectors s and d by s, then by d. Modifies s and d.
 func SortIJ(s, d []uint32) error {
 	if len(s) != len(d) {
 		return errors.New("inputs must be of the same length")
 	}
-	ds := make([]uint64, len(s))
-	for i := 0; i < len(d); i++ {
-		ds[i] = uint64(d[i])<<32 + uint64(s[i])
+	sd := make([]uint64, len(s))
+	for i := 0; i < len(s); i++ {
+		sd[i] = uint64(s[i])<<32 + uint64(d[i])
 	}
-	sort.Slice(ds, func(i, j int) bool { return ds[i] < ds[j] })
+	sort.Slice(sd, func(i, j int) bool { return sd[i] < sd[j] })
 
-	for i := 0; i < len(ds); i++ {
-		d[i] = uint32(ds[i] >> 32)
-		s[i] = uint32(ds[i] & 0x00000000ffffffff)
+	for i := 0; i < len(sd); i++ {
+		s[i] = uint32(sd[i] >> 32)
+		d[i] = uint32(sd[i] & 0x00000000ffffffff)
 	}
 
 	return nil
@@ -95,13 +101,18 @@ func SortIJ(s, d []uint32) error {
 
 // inRange returns true if (r, c) is a valid index into v.
 func (v *GraphMatrix) inRange(r, c uint32) bool {
-	n := v.Size()
+	n := v.Dim()
 	return (c < n) && (r < n)
 }
 
-// Size returns the (single-axis) dimension of the GraphMatrix
-func (v *GraphMatrix) Size() uint32 {
+// Dim returns the (single-axis) dimension of the GraphMatrix
+func (v *GraphMatrix) Dim() uint32 {
 	return uint32(len(v.colptr) - 1)
+}
+
+// N returns the number of defined values in the GraphMatrix
+func (v *GraphMatrix) N() uint64 {
+	return uint64(len(v.rowidx))
 }
 
 // searchsorted32 finds a value x in sorted vector v.
@@ -132,12 +143,12 @@ func (v *GraphMatrix) GetIndex(r, c uint32) bool {
 		return false
 	}
 
-	r1 := v.colptr[c]
-	r2 := v.colptr[c+1]
+	r1 := v.colptr[r]
+	r2 := v.colptr[r+1]
 	if r1 >= r2 {
 		return false
 	}
-	_, found := searchsorted32(v.rowidx, r, r1, r2)
+	_, found := searchsorted32(v.rowidx, c, r1, r2)
 	return found
 }
 
@@ -158,18 +169,18 @@ func (v *GraphMatrix) SetIndex(r, c uint32) error {
 	if !v.inRange(r, c) {
 		return errors.New("index out of range")
 	}
-	rowStartIdx := v.colptr[c] // this is the pointer into the rowidx for column c
-	rowEndIdx := v.colptr[c+1]
+	rowStartIdx := v.colptr[r] // this is the pointer into the rowidx for column c
+	rowEndIdx := v.colptr[r+1]
 
-	i, found := searchsorted32(v.rowidx, r, rowStartIdx, rowEndIdx)
+	i, found := searchsorted32(v.rowidx, c, rowStartIdx, rowEndIdx)
 	if found { // already set
 		return nil
 	}
 	v.rowidx = append(v.rowidx, 0)
 	copy(v.rowidx[i+1:], v.rowidx[i:])
-	v.rowidx[i] = r
+	v.rowidx[i] = c
 
-	for i := int(c + 1); i < len(v.colptr); i++ {
+	for i := int(r + 1); i < len(v.colptr); i++ {
 		v.colptr[i]++
 	}
 	return nil
