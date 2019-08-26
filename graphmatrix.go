@@ -75,7 +75,6 @@ func NewFromSortedIJ(s, d []uint32) (GraphMatrix, error) {
 			currval = n
 		}
 	}
-	fmt.Println("m = ", m)
 	colptr = append(colptr, uint64(m)+1)
 	return GraphMatrix{rowidx: d, colptr: colptr}, nil
 }
