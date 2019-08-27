@@ -1,6 +1,6 @@
 package graphmatrix
 
-// graphmatrix provides csc sparse matrices up to 2^32-1 rows/columns.
+// graphmatrix provides csr sparse matrices up to 2^32-1 rows/columns.
 
 import (
 	"errors"
@@ -10,7 +10,7 @@ import (
 
 // GraphMatrix holds a row index and vector of column pointers.
 // If a point is defined at a particular row i and column j, an
-// edde exists between vertex i and vertex j.
+// edge exists between vertex i and vertex j.
 // GraphMatrices thus represent directed graphs; undirected graphs
 // must explicitly set the reverse edge from j to i.
 type GraphMatrix struct {
@@ -18,7 +18,7 @@ type GraphMatrix struct {
 	colptr []uint64 // indexes into rowidx - must be twice the width of rowidx.
 }
 
-// NewGraphMatrix creates an m x m sparse vector.
+// NewGraphMatrix creates an m x m sparse matrix.
 func New(m int) (GraphMatrix, error) {
 	if m < 0 {
 		return GraphMatrix{}, errors.New("dimensions must be non-negative")
@@ -79,23 +79,43 @@ func NewFromSortedIJ(s, d []uint32) (GraphMatrix, error) {
 	return GraphMatrix{rowidx: d, colptr: colptr}, nil
 }
 
-// SortIJ sorts two vectors s and d by s, then by d. Modifies s and d.
-func SortIJ(s, d []uint32) error {
-	if len(s) != len(d) {
+// SortIJ sorts two vectors s and d by s, then by d, and eliminates any duplicate pairs.
+// Modifies s and d.
+func SortIJ(s, d *[]uint32) error {
+	if len(*s) != len(*d) {
 		return errors.New("inputs must be of the same length")
 	}
-	sd := make([]uint64, len(s))
-	for i := 0; i < len(s); i++ {
-		sd[i] = uint64(s[i])<<32 + uint64(d[i])
+	sd := make([]uint64, len(*s))
+	for i := 0; i < len(*s); i++ {
+		sd[i] = uint64((*s)[i])<<32 + uint64((*d)[i])
 	}
 	sort.Slice(sd, func(i, j int) bool { return sd[i] < sd[j] })
+	UniqSorted(&sd)
 
 	for i := 0; i < len(sd); i++ {
-		s[i] = uint32(sd[i] >> 32)
-		d[i] = uint32(sd[i] & 0x00000000ffffffff)
+		(*s)[i] = uint32(sd[i] >> 32)
+		(*d)[i] = uint32(sd[i] & 0x00000000ffffffff)
 	}
 
+	(*s) = (*s)[:len(sd)]
+	(*d) = (*d)[:len(sd)]
 	return nil
+}
+
+func UniqSorted(a *[]uint64) {
+	j := 0
+	for i := 1; i < len(*a); i++ {
+		if (*a)[j] == (*a)[i] {
+			continue
+		}
+		j++
+		// preserve the original data
+		// in[i], in[j] = in[j], in[i]
+		// only set what is required
+		(*a)[j] = (*a)[i]
+	}
+	(*a) = (*a)[:j+1]
+
 }
 
 // inRange returns true if (r, c) is a valid index into v.

@@ -1,6 +1,8 @@
 package graphmatrix
 
 import (
+	"fmt"
+	"math/rand"
 	"testing"
 )
 
@@ -54,5 +56,76 @@ func TestGraphMatrix(t *testing.T) {
 
 	if r1 := z.GetRow(2); !(len(r1) == 1 && r1[0] == 3) {
 		t.Errorf("Error in GetRow(0): got %v, want %v", r1, []uint32{3})
+	}
+	i = []uint32{1, 2, 3, 0, 0, 2}
+	j = []uint32{2, 3, 2, 1, 2, 3}
+
+	SortIJ(&i, &j)
+	z, err = NewFromSortedIJ(i, j)
+	if z.N() != 5 {
+		t.Errorf("Error in duplicate edge creation: Dim(): got %d, want %d", z.N(), 5)
+	}
+}
+
+func TestUniqSorted(t *testing.T) {
+	a := []uint64{1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16}
+	b := []uint64{1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16}
+	UniqSorted(&a)
+	if len(a) != len(b) {
+		t.Error("len(a) != len(b)")
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			t.Errorf("a[%d] (%d) != b[%d] (%d)", i, a[i], i, b[i])
+		}
+	}
+	a = []uint64{1, 1, 2, 2, 2, 3, 4, 5, 6, 6, 6, 7, 8, 8, 10, 12, 12, 12, 12, 12, 14, 14, 16, 16, 16}
+	UniqSorted(&a)
+	if len(a) != len(b) {
+		t.Error("len(a) != len(b)")
+	}
+	for i := range a {
+		if a[i] != b[i] {
+			t.Errorf("a[%d] (%d) != b[%d] (%d)", i, a[i], i, b[i])
+		}
+	}
+}
+
+func benchmarkGraphMatrix(s, d []uint32, b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		NewFromSortedIJ(s, d)
+	}
+}
+
+func genRandVec(n int) []uint32 {
+	v := make([]uint32, n)
+	m := make(map[uint32]bool)
+	for i := 0; i < n; i++ {
+		v[i] = rand.Uint32()
+		m[v[i]] = true
+	}
+	if n != len(m) {
+		fmt.Println("Duplicates found!")
+	}
+	return v
+}
+
+func BenchmarkGraphMatrix(b *testing.B) {
+
+	ns := []int{10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000}
+	rs := genRandVec(ns[len(ns)-1])
+	rd := genRandVec(ns[len(ns)-1])
+	fmt.Println("pre-sort: len(rs) = ", len(rs), " and len(rd) = ", len(rd))
+	if err := SortIJ(&rs, &rd); err != nil {
+		b.Errorf("oops: %v", err)
+	}
+
+	fmt.Println("post-sort: len(rs) = ", len(rs), " and len(rd) = ", len(rd))
+
+	for _, n := range ns {
+		s := rs[0:n]
+		d := rs[0:n]
+		name := fmt.Sprintf("n=%d", n)
+		b.Run(name, func(b *testing.B) { benchmarkGraphMatrix(s, d, b) })
 	}
 }
