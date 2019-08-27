@@ -18,11 +18,15 @@ type GraphMatrix struct {
 	indices []uint32 // contains the row values for each column. A stride represents the outneighbors of a vertex at col j.
 }
 
+// NZIter is an iterator over the defined points in the graphmatrix.
+// If NZIter.Done is true, there are no more points defined.
+// Changing the graphmatrix in the middle of an iteration will lead
+// to undefined (and almost certainly unwanted) behavior.
 type NZIter struct {
-	g           *GraphMatrix
+	g           GraphMatrix
 	Done        bool
-	indPtrIndex uint32 // indices into g.indptr and g.indices
-	indIndex    uint64
+	indPtrIndex uint32 // index into g.indptr
+	indIndex    uint64 // index into g.indices
 }
 
 func (it *NZIter) Next() (r, c uint32, done bool) {
@@ -40,10 +44,7 @@ func (it *NZIter) Next() (r, c uint32, done bool) {
 	if it.indIndex >= it.g.indptr[r+1] {
 		it.indPtrIndex++
 	}
-	done = false
-	if int(it.indPtrIndex) >= len(it.g.indptr)-1 {
-		done = true
-	}
+	done = it.indPtrIndex >= uint32(len(it.g.indptr)-1)
 	it.Done = done
 	return r, c, done
 }
@@ -54,7 +55,7 @@ func (g GraphMatrix) NewNZIter() NZIter {
 		firstRow++
 	}
 	firstRow--
-	return NZIter{&g, false, firstRow, 0}
+	return NZIter{g, false, firstRow, 0}
 }
 
 // NewGraphMatrix creates an m x m sparse matrix.
@@ -114,7 +115,7 @@ func NewFromSortedIJ(s, d []uint32) (GraphMatrix, error) {
 			currval = n
 		}
 	}
-	indptr = append(indptr, uint64(m)+1)
+	indptr = append(indptr, uint64(len(d)))
 	return GraphMatrix{indptr: indptr, indices: d}, nil
 }
 
@@ -197,7 +198,7 @@ func searchsorted32(v []uint32, x uint32, lo, hi uint64) (int, bool) {
 
 // GetIndex returns true if the value at (r, c) is defined.
 func (g *GraphMatrix) GetIndex(r, c uint32) bool {
-	if len(g.indptr) <= int(c)+1 {
+	if uint32(len(g.indptr)) <= c+1 {
 		return false
 	}
 
@@ -214,7 +215,8 @@ func (g *GraphMatrix) GetIndex(r, c uint32) bool {
 func (g *GraphMatrix) GetRow(n uint32) []uint32 {
 	p1 := g.indptr[n]
 	p2 := g.indptr[n+1]
-	if int(p1) > len(g.indices) || int(p2) > len(g.indices) {
+	leng := uint64(len(g.indices))
+	if p1 > leng || p2 > leng {
 		return []uint32{}
 	}
 	return g.indices[p1:p2]

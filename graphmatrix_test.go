@@ -2,7 +2,6 @@ package graphmatrix
 
 import (
 	"fmt"
-	"math/rand"
 	"testing"
 )
 
@@ -60,13 +59,33 @@ func TestGraphMatrix(t *testing.T) {
 	i = []uint32{1, 2, 3, 0, 0, 2}
 	j = []uint32{2, 3, 2, 1, 2, 3}
 
-	SortIJ(&i, &j)
-	z, err = NewFromSortedIJ(i, j)
+	_ = SortIJ(&i, &j)
+	z, _ = NewFromSortedIJ(i, j)
 	if z.N() != 5 {
 		t.Errorf("Error in duplicate edge creation: Dim(): got %d, want %d", z.N(), 5)
 	}
 }
 
+func TestNZIter(t *testing.T) {
+	a := []uint32{0, 0, 1, 1, 1, 2, 3, 4, 4, 5}
+	b := []uint32{1, 2, 0, 2, 3, 4, 4, 0, 5, 1}
+
+	SortIJ(&a, &b)
+	g, _ := NewFromSortedIJ(a, b)
+
+	it := g.NewNZIter()
+	itct := 0
+	for !it.Done {
+		itct++
+		r, c, _ := it.Next()
+		if !g.GetIndex(r, c) {
+			t.Errorf("(%d, %d) not found in graph", r, c)
+		}
+	}
+	if itct != len(a) {
+		t.Errorf("Iterator count does not match values: got %d, want %d", itct, len(a))
+	}
+}
 func TestUniqSorted(t *testing.T) {
 	a := []uint64{1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16}
 	b := []uint64{1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16}
@@ -99,33 +118,51 @@ func benchmarkGraphMatrix(s, d []uint32, b *testing.B) {
 
 func genRandVec(n int) []uint32 {
 	v := make([]uint32, n)
-	m := make(map[uint32]bool)
-	for i := 0; i < n; i++ {
-		v[i] = rand.Uint32()
-		m[v[i]] = true
-	}
-	if n != len(m) {
-		fmt.Println("Duplicates found!")
-	}
+	// m := make(map[uint32]bool)
+	// for i := 0; i < n; i++ {
+	// 	v[i] = rand.Uint32()
+	// 	m[v[i]] = true
+	// }
+	// if n != len(m) {
+	// 	fmt.Println("Duplicates found!")
+	// }
 	return v
 }
 
-func BenchmarkGraphMatrix(b *testing.B) {
+func benchmarkNZIter(g GraphMatrix, b *testing.B) {
+	for n := 0; n < b.N; n++ {
+		it := g.NewNZIter()
+		for !it.Done {
+			it.Next()
+		}
+	}
+}
 
+func BenchmarkGraphMatrix(b *testing.B) {
 	ns := []int{10, 100, 1000, 10000, 100000, 1000000, 10000000, 100000000}
-	rs := genRandVec(ns[len(ns)-1])
-	rd := genRandVec(ns[len(ns)-1])
-	fmt.Println("pre-sort: len(rs) = ", len(rs), " and len(rd) = ", len(rd))
+	maxn := int(float64(ns[len(ns)-1]) * 1.2)
+	rs := genRandVec(maxn)
+	rd := genRandVec(maxn)
+	// fmt.Println("pre-sort: len(rs) = ", len(rs), " and len(rd) = ", len(rd))
 	if err := SortIJ(&rs, &rd); err != nil {
 		b.Errorf("oops: %v", err)
 	}
 
-	fmt.Println("post-sort: len(rs) = ", len(rs), " and len(rd) = ", len(rd))
+	// fmt.Println("post-sort: len(rs) = ", len(rs), " and len(rd) = ", len(rd))
 
 	for _, n := range ns {
 		s := rs[0:n]
-		d := rs[0:n]
+		d := rd[0:n]
 		name := fmt.Sprintf("n=%d", n)
 		b.Run(name, func(b *testing.B) { benchmarkGraphMatrix(s, d, b) })
+	}
+	fmt.Println("nziter")
+	for _, n := range ns {
+		s := rs[0:n]
+		d := rd[0:n]
+		SortIJ(&s, &d)
+		g, _ := NewFromSortedIJ(s, d)
+		name := fmt.Sprintf("nziter=%d", n)
+		b.Run(name, func(b *testing.B) { benchmarkNZIter(g, b) })
 	}
 }
