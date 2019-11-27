@@ -1,3 +1,7 @@
+// Graphmatrix provides an implementation of sparse matrices used to describe unweighted graphs.
+// Matrices are represented by two vectors representing a CSR sparse matrix index, with no
+// `nzval` vector. Methods for setting and testing at a given (row, col) index are provided, as
+// well as an iterator over all set points.
 package graphmatrix
 
 import (

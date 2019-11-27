@@ -8,18 +8,20 @@ package graphmatrix
 // to undefined (and almost certainly unwanted) behavior.
 type NZIter struct {
 	g                GraphMatrix
-	Done             bool
-	rowIndex         uint32
-	colIndex         uint32
-	rowStart, rowEnd uint64
+	Done             bool 	 // `true` if the iterator has exhausted all nonzero values.
+	rowIndex         uint32  // index into the row.
+	colIndex         uint32  // index into the column value within a given row.
+	rowStart, rowEnd uint64  // from IndPtr, the index of the row's start and end.
 }
 
+// NewNZIter creates a new graphmatrix iterator over a graphmatrix.
 func (g GraphMatrix) NewNZIter() NZIter {
 	rowEnd := g.IndPtr[1]
-
 	return NZIter{g: g, Done: false, rowEnd: rowEnd}
 }
 
+// advance moves the iterator to the next nonzero entry, returning boolean
+// if we're at the end.
 func (it *NZIter) advance() bool {
 	rowLen := uint32(it.rowEnd - it.rowStart)
 	it.colIndex++
@@ -36,6 +38,10 @@ func (it *NZIter) advance() bool {
 	return false
 }
 
+// Next returns the next nonzero entry in the iterator, returning its row and column.
+// The iterator state is modified so that subsequent calls to `Next()` will retrieve
+// successive nonzero values. Once all values are produced, `Next()` will set the
+// iterator's `Done` field to `true` and will return `0, 0`.
 func (it *NZIter) Next() (uint32, uint32) {
 	if it.Done {
 		return 0, 0
