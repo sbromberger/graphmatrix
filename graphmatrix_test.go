@@ -6,7 +6,7 @@ import (
 )
 
 func TestGraphMatrix(t *testing.T) {
-	z, err := New(6)
+	z, err := NewZero(6)
 	if err != nil {
 		t.Errorf("Error creating New(6)")
 	}
@@ -49,11 +49,11 @@ func TestGraphMatrix(t *testing.T) {
 			t.Errorf("Error in GetIndex(%d,%d): got %v, want %v", ss[i], ds[i], rx, rs[i])
 		}
 	}
-	if r1 := z.GetRow(0); !(len(r1) == 2 && r1[0] == 1 && r1[1] == 2) {
+	if r1, _ := z.GetRow(0); !(len(r1) == 2 && r1[0] == 1 && r1[1] == 2) {
 		t.Errorf("Error in GetRow(0): got %v, want %v", r1, []uint32{1, 2})
 	} // should be [1, 2]
 
-	if r1 := z.GetRow(2); !(len(r1) == 1 && r1[0] == 3) {
+	if r1, _ := z.GetRow(2); !(len(r1) == 1 && r1[0] == 3) {
 		t.Errorf("Error in GetRow(0): got %v, want %v", r1, []uint32{3})
 	}
 	i = []uint32{1, 2, 3, 0, 0, 2}
@@ -77,7 +77,8 @@ func TestNZIter(t *testing.T) {
 	itct := 0
 	for !it.Done {
 		itct++
-		r, c, _ := it.Next()
+		r, c := it.Next()
+		fmt.Println(r, c)
 		if !g.GetIndex(r, c) {
 			t.Errorf("(%d, %d) not found in graph", r, c)
 		}
@@ -133,7 +134,7 @@ func benchmarkNZIter(g GraphMatrix, b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		it := g.NewNZIter()
 		for !it.Done {
-			it.Next()
+			_, _ = it.Next()
 		}
 	}
 }

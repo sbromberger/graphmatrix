@@ -1,11 +1,15 @@
 package graphmatrix
 
-// graphmatrix provides csr sparse matrices up to 2^32-1 rows/columns.
-
 import (
+	// "errors"
 	"errors"
 	"fmt"
 	"sort"
+	// "sort"
+)
+
+const (
+	u0 = uint32(0)
 )
 
 // GraphMatrix holds a row index and vector of column pointers.
@@ -18,63 +22,209 @@ type GraphMatrix struct {
 	Indices []uint32 // contains the row values for each column. A stride represents the outneighbors of a vertex at col j.
 }
 
+// String is used for pretty printing.
+func (g GraphMatrix) String() string {
+	return fmt.Sprintf("GraphMatrix %v, %v, size %d", g.IndPtr, g.Indices, g.Dim())
+}
+
+func (g GraphMatrix) GetRow(r uint32) ([]uint32, error) {
+	if r > uint32(len(g.IndPtr))-1 {
+		return []uint32{}, fmt.Errorf("Row %d out of bounds (max %d)", r, len(g.IndPtr))
+	}
+	rowStart := g.IndPtr[r]
+	rowEnd := g.IndPtr[r+1]
+	return g.Indices[rowStart:rowEnd], nil
+}
+
 // NZIter is an iterator over the defined points in the graphmatrix.
 // If NZIter.Done is true, there are no more points defined.
 // Changing the graphmatrix in the middle of an iteration will lead
 // to undefined (and almost certainly unwanted) behavior.
 type NZIter struct {
-	g           GraphMatrix
-	Done        bool
-	indPtrIndex uint32 // index into g.IndPtr
-	indIndex    uint64 // index into g.Indices
+	g                GraphMatrix
+	Done             bool
+	rowIndex         uint32
+	colIndex         uint32
+	rowStart, rowEnd uint64
 }
 
-func (it *NZIter) Next() (r, c uint32, done bool) {
-	// if we're already done
+func (g GraphMatrix) NewNZIter() NZIter {
+	rowEnd := g.IndPtr[1]
+
+	return NZIter{g: g, Done: false, rowEnd: rowEnd}
+}
+
+func (it *NZIter) advance() bool {
+	rowLen := uint32(it.rowEnd - it.rowStart)
+	it.colIndex++
+	if it.colIndex >= rowLen {
+		it.colIndex = 0
+		it.rowIndex++
+		if it.rowIndex < uint32(len(it.g.IndPtr)-1) {
+			it.rowStart = it.g.IndPtr[it.rowIndex]
+			it.rowEnd = it.g.IndPtr[it.rowIndex+1]
+			return false
+		}
+		return true
+	}
+	return false
+}
+
+func (it *NZIter) Next() (uint32, uint32) {
 	if it.Done {
-		return 0, 0, true
+		return 0, 0
 	}
-	// get the row and column
-	r = it.indPtrIndex
-	c = it.g.Indices[it.indIndex]
-
-	// increment to the next set index
-	it.indIndex++
-	// did we move to a new row?
-	if it.indIndex >= it.g.IndPtr[r+1] {
-		it.indPtrIndex++
+	rowLen := uint32(it.rowEnd - it.rowStart)
+	for rowLen == 0 {
+		it.Done = it.advance()
+		rowLen = uint32(it.rowEnd - it.rowStart)
 	}
-	done = it.indPtrIndex >= uint32(len(it.g.IndPtr)-1)
-	it.Done = done
-	return r, c, done
-}
+	r := it.rowIndex
+	index := it.rowStart + uint64(it.colIndex)
+	c := it.g.Indices[index]
 
-func (g GraphMatrix) NewNZIter() *NZIter {
-	firstRow := uint32(0)
-	for g.IndPtr[firstRow] == 0 {
-		firstRow++
+	it.Done = it.advance()
+	return r, c
+}
+func cumsum(p []uint64, c []uint64, n uint64) uint64 {
+	nz := uint64(0)
+	for i := nz; i < n; i++ {
+		p[i] = nz
+		nz += uint64(c[i])
+		c[i] = p[i]
 	}
-	firstRow--
-	return &NZIter{g, false, firstRow, 0}
+	p[n] = nz
+	return nz
 }
 
-// NewGraphMatrix creates an m x m sparse matrix.
-func New(m int) (GraphMatrix, error) {
-	if m < 0 {
-		return GraphMatrix{}, errors.New("dimensions must be non-negative")
+func compress(row []uint32, col []uint32, n uint64) (ia []uint64, ja []uint32) {
+	w := make([]uint64, n+1)
+	ia = make([]uint64, n+1)
+	ja = make([]uint32, len(col))
+
+	for _, v := range row {
+		w[v]++
 	}
-	i := make([]uint32, 0)
-	ip := make([]uint64, m+1)
-	return GraphMatrix{IndPtr: ip, Indices: i}, nil
+	cumsum(ia, w, n)
+
+	for j, v := range col {
+		p := w[row[j]]
+		ja[p] = v
+		w[row[j]]++
+	}
+	return
 }
 
-func NewFromRC(Indices []uint32, IndPtr []uint64) (GraphMatrix, error) {
-	return GraphMatrix{IndPtr: IndPtr, Indices: Indices}, nil
+// inRange returns true if (r, c) is a valid index into v.
+func (g *GraphMatrix) inRange(r, c uint32) bool {
+	n := g.Dim()
+	return (c < n) && (r < n)
 }
 
-func (g GraphMatrix) String() string {
-	return fmt.Sprintf("GraphMatrix %v, %v, size %d", g.IndPtr, g.Indices, g.Dim())
+// Dim returns the (single-axis) dimension of the GraphMatrix
+func (g GraphMatrix) Dim() uint32 {
+	return uint32(len(g.IndPtr) - 1)
 }
+
+// N returns the number of defined values in the GraphMatrix
+func (g *GraphMatrix) N() uint64 {
+	return uint64(len(g.Indices))
+}
+
+// searchSorted32 finds a value x in sorted vector v.
+// Returns index and true/false indicating found.
+// lo and hi constrains search to these Indices.
+// If lo/hi are out of bounds, return -1 and false unless
+// the vector is empty, in which case return 0 and false.
+func searchSorted32(v []uint32, x uint32, lo, hi uint64) (int, bool) {
+	ulen := uint64(len(v))
+	if ulen == 0 {
+		return 0, false
+	}
+	if lo == hi {
+		return int(lo), false
+	}
+	if ulen < lo || ulen < hi || lo > hi {
+		return -1, false
+	}
+	s := sort.Search(int(hi-lo), func(i int) bool { return v[int(lo)+i] >= x }) + int(lo)
+	found := (s < len(v)) && (v[s] == x)
+
+	return s, found
+}
+
+// GetIndex returns true if the value at (r, c) is defined.
+func (g GraphMatrix) GetIndex(r, c uint32) bool {
+	if uint32(len(g.IndPtr)) <= c+1 {
+		return false
+	}
+
+	r1 := g.IndPtr[r]
+	r2 := g.IndPtr[r+1]
+	if r1 >= r2 {
+		return false
+	}
+	_, found := searchSorted32(g.Indices, c, r1, r2)
+	return found
+}
+
+// GetRow returns the 'n'th row slice, or an empty slice if empty.
+// func (g GraphMatrix) GetRow(n uint32) []uint32 {
+// 	p1 := g.IndPtr[n]
+// 	p2 := g.IndPtr[n+1]
+// 	leng := uint64(len(g.Indices))
+// 	if p1 > leng || p2 > leng {
+// 		return []uint32{}
+// 	}
+// 	return g.Indices[p1:p2]
+// }
+//
+// SetIndex sets the value at (r, c) to true.
+// This can be a relatively expensive operation as it can force
+// reallocation as the vectors increase in size.
+func (g *GraphMatrix) SetIndex(r, c uint32) error {
+	if !g.inRange(r, c) {
+		return errors.New("index out of range")
+	}
+	rowStartIdx := g.IndPtr[r] // this is the pointer into the Indices for column c
+	rowEndIdx := g.IndPtr[r+1]
+
+	i, found := searchSorted32(g.Indices, c, rowStartIdx, rowEndIdx)
+	if found { // already set
+		return nil
+	}
+	g.Indices = append(g.Indices, 0)
+	copy(g.Indices[i+1:], g.Indices[i:])
+	g.Indices[i] = c
+
+	for i := int(r + 1); i < len(g.IndPtr); i++ {
+		g.IndPtr[i]++
+	}
+	return nil
+}
+
+// func dedupe(ia []int, ja []int, m int, n int) ([]int, []float64) {
+// 	w := make([]int, n)
+// 	nz := 0
+//
+// 	for i := 0; i < m; i++ {
+// 		q := nz
+// 		for j := ia[i]; j < ia[i+1]; j++ {
+// 			if w[ja[j]] > q {
+// 				d[w[ja[j]]] += d[j]
+// 			} else {
+// 				w[ja[j]] = nz
+// 				ja[nz] = ja[j]
+// 				d[nz] = d[j]
+// 				nz++
+// 			}
+// 		}
+// 		ia[i] = q
+// 	}
+// 	ia[m] = nz
+//
+// 	return ja[:nz], d[:nz]
+// }
 
 // returns the maximum uint and its position in the vector.
 // returns -1 as position if the vector is empty.
@@ -93,9 +243,17 @@ func maxUint32(v []uint32) (max uint32, maxPos int) {
 	return max, maxPos
 }
 
-// NewFromSortedIJ creates a graph matrix using i,j as src, dst
-// of edges. Assumes i and j are already sorted, j first.
-func NewFromSortedIJ(s, d []uint32) (GraphMatrix, error) {
+// NewZero creates an m x m sparse matrix.
+func NewZero(m int) (GraphMatrix, error) {
+	if m < 0 {
+		return GraphMatrix{}, errors.New("dimensions must be non-negative")
+	}
+	i := make([]uint32, 0)
+	ip := make([]uint64, m+1)
+	return GraphMatrix{IndPtr: ip, Indices: i}, nil
+}
+
+func NewFromSortedIJ(s []uint32, d []uint32) (GraphMatrix, error) {
 	if len(s) != len(d) {
 		return GraphMatrix{}, fmt.Errorf("graph inputs must be of the same length (got %d, %d)", len(s), len(d))
 	}
@@ -105,18 +263,11 @@ func NewFromSortedIJ(s, d []uint32) (GraphMatrix, error) {
 	if m2 > m1 {
 		m = m2
 	}
-	m++
+	m++ // m is the number of rows/cols for this matrix.
 
-	IndPtr := make([]uint64, s[0]+1, m)
-	currval := s[0]
-	for i, n := range s {
-		if n > currval { // the row has changed
-			IndPtr = append(IndPtr, uint64(i))
-			currval = n
-		}
-	}
-	IndPtr = append(IndPtr, uint64(len(d)))
-	return GraphMatrix{IndPtr: IndPtr, Indices: d}, nil
+	ia, ja := compress(s, d, uint64(m))
+	// ja, data = dedupe(ia, ja, data, c.r, c.c)
+	return GraphMatrix{ia, ja}, nil
 }
 
 // SortIJ sorts two vectors s and d by s, then by d, and eliminates any duplicate pairs.
@@ -156,92 +307,4 @@ func UniqSorted(a *[]uint64) {
 	}
 	(*a) = (*a)[:j+1]
 
-}
-
-// inRange returns true if (r, c) is a valid index into v.
-func (g *GraphMatrix) inRange(r, c uint32) bool {
-	n := g.Dim()
-	return (c < n) && (r < n)
-}
-
-// Dim returns the (single-axis) dimension of the GraphMatrix
-func (g *GraphMatrix) Dim() uint32 {
-	return uint32(len(g.IndPtr) - 1)
-}
-
-// N returns the number of defined values in the GraphMatrix
-func (g *GraphMatrix) N() uint64 {
-	return uint64(len(g.Indices))
-}
-
-// SearchSorted32 finds a value x in sorted vector v.
-// Returns index and true/false indicating found.
-// lo and hi constrains search to these Indices.
-// If lo/hi are out of bounds, return -1 and false unless
-// the vector is empty, in which case return 0 and false.
-func SearchSorted32(v []uint32, x uint32, lo, hi uint64) (int, bool) {
-	ulen := uint64(len(v))
-	if ulen == 0 {
-		return 0, false
-	}
-	if lo == hi {
-		return int(lo), false
-	}
-	if ulen < lo || ulen < hi || lo > hi {
-		return -1, false
-	}
-	s := sort.Search(int(hi-lo), func(i int) bool { return v[int(lo)+i] >= x }) + int(lo)
-	found := (s < len(v)) && (v[s] == x)
-
-	return s, found
-}
-
-// GetIndex returns true if the value at (r, c) is defined.
-func (g GraphMatrix) GetIndex(r, c uint32) bool {
-	if uint32(len(g.IndPtr)) <= c+1 {
-		return false
-	}
-
-	r1 := g.IndPtr[r]
-	r2 := g.IndPtr[r+1]
-	if r1 >= r2 {
-		return false
-	}
-	_, found := SearchSorted32(g.Indices, c, r1, r2)
-	return found
-}
-
-// GetRow returns the 'n'th row slice, or an empty slice if empty.
-func (g GraphMatrix) GetRow(n uint32) []uint32 {
-	p1 := g.IndPtr[n]
-	p2 := g.IndPtr[n+1]
-	leng := uint64(len(g.Indices))
-	if p1 > leng || p2 > leng {
-		return []uint32{}
-	}
-	return g.Indices[p1:p2]
-}
-
-// SetIndex sets the value at (r, c) to true.
-// This can be a relatively expensive operation as it can force
-// reallocation as the vectors increase in size.
-func (g *GraphMatrix) SetIndex(r, c uint32) error {
-	if !g.inRange(r, c) {
-		return errors.New("index out of range")
-	}
-	rowStartIdx := g.IndPtr[r] // this is the pointer into the Indices for column c
-	rowEndIdx := g.IndPtr[r+1]
-
-	i, found := SearchSorted32(g.Indices, c, rowStartIdx, rowEndIdx)
-	if found { // already set
-		return nil
-	}
-	g.Indices = append(g.Indices, 0)
-	copy(g.Indices[i+1:], g.Indices[i:])
-	g.Indices[i] = c
-
-	for i := int(r + 1); i < len(g.IndPtr); i++ {
-		g.IndPtr[i]++
-	}
-	return nil
 }
