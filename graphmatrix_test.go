@@ -78,7 +78,6 @@ func TestNZIter(t *testing.T) {
 	for !it.Done {
 		itct++
 		r, c := it.Next()
-		fmt.Println(r, c)
 		if !g.GetIndex(r, c) {
 			t.Errorf("(%d, %d) not found in graph", r, c)
 		}

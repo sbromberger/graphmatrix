@@ -8,10 +8,6 @@ import (
 	// "sort"
 )
 
-const (
-	u0 = uint32(0)
-)
-
 // GraphMatrix holds a row index and vector of column pointers.
 // If a point is defined at a particular row i and column j, an
 // edge exists between vertex i and vertex j.
@@ -27,6 +23,7 @@ func (g GraphMatrix) String() string {
 	return fmt.Sprintf("GraphMatrix %v, %v, size %d", g.IndPtr, g.Indices, g.Dim())
 }
 
+// GetRow returns the 'n'th row slice, or an empty slice if empty.
 func (g GraphMatrix) GetRow(r uint32) ([]uint32, error) {
 	if r > uint32(len(g.IndPtr))-1 {
 		return []uint32{}, fmt.Errorf("Row %d out of bounds (max %d)", r, len(g.IndPtr))
@@ -168,17 +165,6 @@ func (g GraphMatrix) GetIndex(r, c uint32) bool {
 	return found
 }
 
-// GetRow returns the 'n'th row slice, or an empty slice if empty.
-// func (g GraphMatrix) GetRow(n uint32) []uint32 {
-// 	p1 := g.IndPtr[n]
-// 	p2 := g.IndPtr[n+1]
-// 	leng := uint64(len(g.Indices))
-// 	if p1 > leng || p2 > leng {
-// 		return []uint32{}
-// 	}
-// 	return g.Indices[p1:p2]
-// }
-//
 // SetIndex sets the value at (r, c) to true.
 // This can be a relatively expensive operation as it can force
 // reallocation as the vectors increase in size.
@@ -202,29 +188,6 @@ func (g *GraphMatrix) SetIndex(r, c uint32) error {
 	}
 	return nil
 }
-
-// func dedupe(ia []int, ja []int, m int, n int) ([]int, []float64) {
-// 	w := make([]int, n)
-// 	nz := 0
-//
-// 	for i := 0; i < m; i++ {
-// 		q := nz
-// 		for j := ia[i]; j < ia[i+1]; j++ {
-// 			if w[ja[j]] > q {
-// 				d[w[ja[j]]] += d[j]
-// 			} else {
-// 				w[ja[j]] = nz
-// 				ja[nz] = ja[j]
-// 				d[nz] = d[j]
-// 				nz++
-// 			}
-// 		}
-// 		ia[i] = q
-// 	}
-// 	ia[m] = nz
-//
-// 	return ja[:nz], d[:nz]
-// }
 
 // returns the maximum uint and its position in the vector.
 // returns -1 as position if the vector is empty.
@@ -306,5 +269,4 @@ func UniqSorted(a *[]uint64) {
 		(*a)[j] = (*a)[i]
 	}
 	(*a) = (*a)[:j+1]
-
 }
