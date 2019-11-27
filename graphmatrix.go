@@ -33,56 +33,7 @@ func (g GraphMatrix) GetRow(r uint32) ([]uint32, error) {
 	return g.Indices[rowStart:rowEnd], nil
 }
 
-// NZIter is an iterator over the defined points in the graphmatrix.
-// If NZIter.Done is true, there are no more points defined.
-// Changing the graphmatrix in the middle of an iteration will lead
-// to undefined (and almost certainly unwanted) behavior.
-type NZIter struct {
-	g                GraphMatrix
-	Done             bool
-	rowIndex         uint32
-	colIndex         uint32
-	rowStart, rowEnd uint64
-}
-
-func (g GraphMatrix) NewNZIter() NZIter {
-	rowEnd := g.IndPtr[1]
-
-	return NZIter{g: g, Done: false, rowEnd: rowEnd}
-}
-
-func (it *NZIter) advance() bool {
-	rowLen := uint32(it.rowEnd - it.rowStart)
-	it.colIndex++
-	if it.colIndex >= rowLen {
-		it.colIndex = 0
-		it.rowIndex++
-		if it.rowIndex < uint32(len(it.g.IndPtr)-1) {
-			it.rowStart = it.g.IndPtr[it.rowIndex]
-			it.rowEnd = it.g.IndPtr[it.rowIndex+1]
-			return false
-		}
-		return true
-	}
-	return false
-}
-
-func (it *NZIter) Next() (uint32, uint32) {
-	if it.Done {
-		return 0, 0
-	}
-	rowLen := uint32(it.rowEnd - it.rowStart)
-	for rowLen == 0 {
-		it.Done = it.advance()
-		rowLen = uint32(it.rowEnd - it.rowStart)
-	}
-	r := it.rowIndex
-	index := it.rowStart + uint64(it.colIndex)
-	c := it.g.Indices[index]
-
-	it.Done = it.advance()
-	return r, c
-}
+// cumsum was taken from github.com/james-bowman/sparse.
 func cumsum(p []uint64, c []uint64, n uint64) uint64 {
 	nz := uint64(0)
 	for i := nz; i < n; i++ {
@@ -94,6 +45,7 @@ func cumsum(p []uint64, c []uint64, n uint64) uint64 {
 	return nz
 }
 
+// compress was modified from github.com/james-bowman/sparse.
 func compress(row []uint32, col []uint32, n uint64) (ia []uint64, ja []uint32) {
 	w := make([]uint64, n+1)
 	ia = make([]uint64, n+1)
@@ -128,28 +80,6 @@ func (g *GraphMatrix) N() uint64 {
 	return uint64(len(g.Indices))
 }
 
-// searchSorted32 finds a value x in sorted vector v.
-// Returns index and true/false indicating found.
-// lo and hi constrains search to these Indices.
-// If lo/hi are out of bounds, return -1 and false unless
-// the vector is empty, in which case return 0 and false.
-func searchSorted32(v []uint32, x uint32, lo, hi uint64) (int, bool) {
-	ulen := uint64(len(v))
-	if ulen == 0 {
-		return 0, false
-	}
-	if lo == hi {
-		return int(lo), false
-	}
-	if ulen < lo || ulen < hi || lo > hi {
-		return -1, false
-	}
-	s := sort.Search(int(hi-lo), func(i int) bool { return v[int(lo)+i] >= x }) + int(lo)
-	found := (s < len(v)) && (v[s] == x)
-
-	return s, found
-}
-
 // GetIndex returns true if the value at (r, c) is defined.
 func (g GraphMatrix) GetIndex(r, c uint32) bool {
 	if uint32(len(g.IndPtr)) <= c+1 {
@@ -161,7 +91,7 @@ func (g GraphMatrix) GetIndex(r, c uint32) bool {
 	if r1 >= r2 {
 		return false
 	}
-	_, found := searchSorted32(g.Indices, c, r1, r2)
+	_, found := SearchSorted32(g.Indices, c, r1, r2)
 	return found
 }
 
@@ -175,7 +105,7 @@ func (g *GraphMatrix) SetIndex(r, c uint32) error {
 	rowStartIdx := g.IndPtr[r] // this is the pointer into the Indices for column c
 	rowEndIdx := g.IndPtr[r+1]
 
-	i, found := searchSorted32(g.Indices, c, rowStartIdx, rowEndIdx)
+	i, found := SearchSorted32(g.Indices, c, rowStartIdx, rowEndIdx)
 	if found { // already set
 		return nil
 	}
@@ -269,4 +199,26 @@ func UniqSorted(a *[]uint64) {
 		(*a)[j] = (*a)[i]
 	}
 	(*a) = (*a)[:j+1]
+}
+
+// SearchSorted32 finds a value x in sorted vector v.
+// Returns index and true/false indicating found.
+// lo and hi constrains search to these Indices.
+// If lo/hi are out of bounds, return -1 and false unless
+// the vector is empty, in which case return 0 and false.
+func SearchSorted32(v []uint32, x uint32, lo, hi uint64) (int, bool) {
+	ulen := uint64(len(v))
+	if ulen == 0 {
+		return 0, false
+	}
+	if lo == hi {
+		return int(lo), false
+	}
+	if ulen < lo || ulen < hi || lo > hi {
+		return -1, false
+	}
+	s := sort.Search(int(hi-lo), func(i int) bool { return v[int(lo)+i] >= x }) + int(lo)
+	found := (s < len(v)) && (v[s] == x)
+
+	return s, found
 }
