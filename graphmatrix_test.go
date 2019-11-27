@@ -33,16 +33,16 @@ func TestGraphMatrix(t *testing.T) {
 		t.Errorf("GetIndex(2,2): got %v, want %v", y, false)
 	}
 
-	i := []uint32{0, 0, 1, 2, 3}
-	j := []uint32{1, 2, 2, 3, 2}
+	i := []uint32{0, 0, 1, 2, 3, 8}
+	j := []uint32{1, 2, 2, 3, 2, 7}
 	z, err = NewFromSortedIJ(i, j)
 	if err != nil {
 		t.Errorf("Error creating NewFromSortedIJ()")
 	}
 	// fmt.Println("should be t, t, t, f")
-	ss := []uint32{0, 0, 1, 3, 2, 2}
-	ds := []uint32{1, 2, 2, 2, 3, 1}
-	rs := []bool{true, true, true, true, true, false}
+	ss := []uint32{0, 0, 1, 3, 2, 2, 8, 7}
+	ds := []uint32{1, 2, 2, 2, 3, 1, 7, 8}
+	rs := []bool{true, true, true, true, true, false, true, false}
 
 	for i := 0; i < len(ss); i++ {
 		if rx := z.GetIndex(ss[i], ds[i]); rx != rs[i] {
@@ -67,10 +67,10 @@ func TestGraphMatrix(t *testing.T) {
 }
 
 func TestNZIter(t *testing.T) {
-	a := []uint32{0, 0, 1, 1, 1, 2, 3, 4, 4, 5}
-	b := []uint32{1, 2, 0, 2, 3, 4, 4, 0, 5, 1}
+	a := []uint32{0, 0, 1, 1, 1, 2, 3, 4, 4, 5, 10}
+	b := []uint32{1, 2, 0, 2, 3, 4, 4, 0, 5, 1, 8}
 
-	SortIJ(&a, &b)
+	_ = SortIJ(&a, &b)
 	g, _ := NewFromSortedIJ(a, b)
 
 	it := g.NewNZIter()
@@ -112,7 +112,7 @@ func TestUniqSorted(t *testing.T) {
 
 func benchmarkGraphMatrix(s, d []uint32, b *testing.B) {
 	for n := 0; n < b.N; n++ {
-		NewFromSortedIJ(s, d)
+		_, _ = NewFromSortedIJ(s, d)
 	}
 }
 
