@@ -68,12 +68,12 @@ func (g *GraphMatrix) inRange(r, c uint32) bool {
 	return (c < n) && (r < n)
 }
 
-// Dim returns the (single-axis) dimension of the GraphMatrix
+// Dim returns the (single-axis) dimension of the GraphMatrix.
 func (g GraphMatrix) Dim() uint32 {
 	return uint32(len(g.IndPtr) - 1)
 }
 
-// N returns the number of defined values in the GraphMatrix
+// N returns the number of defined values in the GraphMatrix.
 func (g *GraphMatrix) N() uint64 {
 	return uint64(len(g.Indices))
 }
@@ -184,6 +184,7 @@ func SortIJ(s, d *[]uint32) error {
 	return nil
 }
 
+// UniqSorted deduplicates a sorted vector in place.
 func UniqSorted(a *[]uint64) {
 	j := 0
 	for i := 1; i < len(*a); i++ {

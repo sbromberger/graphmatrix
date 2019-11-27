@@ -1,3 +1,5 @@
+[![](https://godoc.org/github.com/sbromberger/graphmatrix?status.svg)](http://godoc.org/github.com/sbromberger/graphmatrix)
+
 # GraphMatrix
 
 ## Simplified, efficient sparse matrix representations for unweighted graphs
