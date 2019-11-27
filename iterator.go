@@ -1,5 +1,7 @@
 package graphmatrix
 
+// This file contains code for iterating over graphmatrices.
+
 // NZIter is an iterator over the defined points in the graphmatrix.
 // If NZIter.Done is true, there are no more points defined.
 // Changing the graphmatrix in the middle of an iteration will lead

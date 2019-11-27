@@ -1,11 +1,9 @@
 package graphmatrix
 
 import (
-	// "errors"
 	"errors"
 	"fmt"
 	"sort"
-	// "sort"
 )
 
 // GraphMatrix holds a row index and vector of column pointers.
