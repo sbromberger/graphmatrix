@@ -75,9 +75,9 @@ func TestNZIter(t *testing.T) {
 
 	it := g.NewNZIter()
 	itct := 0
-	for !it.Done {
+	for !it.Done() {
 		itct++
-		r, c := it.Next()
+		r, c, _ := it.Next()
 		if !g.GetIndex(r, c) {
 			t.Errorf("(%d, %d) not found in graph", r, c)
 		}
@@ -86,6 +86,7 @@ func TestNZIter(t *testing.T) {
 		t.Errorf("Iterator count does not match values: got %d, want %d", itct, len(a))
 	}
 }
+
 func TestUniqSorted(t *testing.T) {
 	a := []uint64{1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16}
 	b := []uint64{1, 2, 3, 4, 5, 6, 7, 8, 10, 12, 14, 16}
@@ -132,8 +133,8 @@ func genRandVec(n int) []uint32 {
 func benchmarkNZIter(g GraphMatrix, b *testing.B) {
 	for n := 0; n < b.N; n++ {
 		it := g.NewNZIter()
-		for !it.Done {
-			_, _ = it.Next()
+		for !it.Done() {
+			_, _, _ = it.Next()
 		}
 	}
 }

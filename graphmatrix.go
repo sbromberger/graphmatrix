@@ -28,7 +28,7 @@ func (g GraphMatrix) String() string {
 // GetRow returns the 'n'th row slice, or an empty slice if empty.
 func (g GraphMatrix) GetRow(r uint32) ([]uint32, error) {
 	if r > uint32(len(g.IndPtr))-1 {
-		return []uint32{}, fmt.Errorf("Row %d out of bounds (max %d)", r, len(g.IndPtr))
+		return []uint32{}, fmt.Errorf("row %d out of bounds (max %d)", r, len(g.IndPtr))
 	}
 	rowStart := g.IndPtr[r]
 	rowEnd := g.IndPtr[r+1]
